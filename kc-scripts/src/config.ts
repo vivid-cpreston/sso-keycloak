@@ -3,6 +3,10 @@ import dotenv from 'dotenv';
 
 dotenv.config({ path: __dirname + '/.env' });
 
+export const WEBADE_USERNAME = process.env.WEBADE_USERNAME;
+export const WEBADE_PASSWORD = process.env.WEBADE_PASSWORD;
+export const WEBADE_URL = process.env.WEBADE_URL;
+
 export const DEV_KEYCLOAK_URL = process.env.DEV_KEYCLOAK_URL || 'https://dev.oidc.gov.bc.ca';
 export const DEV_KEYCLOAK_CLIENT_ID = process.env.DEV_KEYCLOAK_CLIENT_ID || 'admin-cli';
 export const DEV_KEYCLOAK_CLIENT_SECRET = process.env.DEV_KEYCLOAK_CLIENT_SECRET;
