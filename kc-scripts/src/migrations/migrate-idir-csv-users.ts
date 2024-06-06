@@ -1,8 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import _ from 'lodash';
-import { WEBADE_USERNAME,WEBADE_PASSWORD, WEBADE_URL } from 'config';
-import * as csv from '@fast-csv/format';
+import { WEBADE_USERNAME,WEBADE_PASSWORD, WEBADE_URL } from '../config';
 import yargs from 'yargs/yargs';
 import { createContainer } from 'container';
 import { parse } from 'csv-parse/sync';
@@ -12,7 +11,7 @@ import { getAdminClient } from 'core';
 import { fetchIdirUser } from 'helpers/webservice-idir';
 import UserRepresentation from '@keycloak/keycloak-admin-client/lib/defs/userRepresentation';
 import { Users } from '@keycloak/keycloak-admin-client/lib/resources/users';
-import { IDIR_USERNAME } from 'config';
+import { IDIR_USERNAME } from '../config';
 import RoleRepresentation, { RoleMappingPayload } from '@keycloak/keycloak-admin-client/lib/defs/roleRepresentation';
 import { assignUserToRealmRole, buildRoleMappings, buildUserRolesMap, createTargetUserRoleBindings } from 'helpers/groups-roles-users';
 import fetch from 'node-fetch';
@@ -65,6 +64,8 @@ const { filePath, realm, env, concurrency, auto, totp } = argv;
 
 const targetAdminClient = getAdminClient() as Promise<KeycloakAdminClient>
 
+console.log(filePath)
+
 const csvFile = fs.readFileSync(filePath)
 
 
@@ -78,9 +79,6 @@ const userList = parse( csvFile,
 
   }
 )
-
-console.log(userList)
-
 
 async function getDetailsFromAccountName(accountName: string){
 
@@ -98,9 +96,9 @@ async function getDetailsFromAccountName(accountName: string){
 
     let response = await fetch(WEBADE_URL + "/usertypes/GOV/users?accountName=" + accountName, {"method": "GET", "headers": headers})
 
-    console.log(">>> response is ", response)
+    console.log(">>> status code is ", response.status.toString())
 
-    let responseJson = await response.json() as userResponse
+    let responseJson = await response.json() as any
 
 
 
@@ -127,15 +125,21 @@ async function pushUsers(
   userList: [{
     idir_username: string,
     role_list: string
-  }]
+  }],
+  guidList: string[]
 ) {
   let userCount = 0
+
+  console.log(userList)
 
   for (const user of userList) {
     console.log("USER",user.idir_username)
 
   let webadeDetails = await getDetailsFromAccountName(user.idir_username)
 
+    console.log("Push ", webadeDetails.userGuid + "@azureidir")
+    guidList.push( webadeDetails.userGuid + "@azureidir")
+    console.log("GuidList is",guidList.toString())
 
     console.log("Webade Details are:",webadeDetails)
 
@@ -151,6 +155,7 @@ async function pushUsers(
     let details;
 
     if (targetUsers.length > 0) {
+      console.log("targetUser exists")
       details = targetUsers[0] as UserRepresentation
       details.username = webadeDetails.userGuid + "@azureidir"
       details.lastName = webadeDetails.lastName.length>0 ? webadeDetails.lastName : details.lastName
@@ -177,16 +182,12 @@ async function pushUsers(
     }
 
 
-    console.log(details);
-
-
-
     if (targetUsers.length === 0) {
       console.log("Adding user", user.idir_username)
       const newuser = await targetAdminClient.users.create({
         enabled: true,
         realm: realm,
-        username: webadeDetails + "@azureidir",
+        username: webadeDetails.userGuid + "@azureidir",
         firstName: details.firstName,
         lastName: details.lastName,
         attributes: {
@@ -222,32 +223,38 @@ async function pushUsers(
           idir_username: details.attributes?.idir_username
         },
       })
-      console.log("Updated user", webadeDetails.accountName)
     }
   }
+
+  return guidList
 }
 
 async function mapUserRoles(
   targetAdminClient: KeycloakAdminClient,
+  guidList: string[],
   userList: [{
-    username: string,
     idir_username: string
-    client_list: string
+    role_list: string
   }]
 ) {
+
+
+
 
 
   let rolesMap = await buildRoleMappings(targetAdminClient, {realm: env, excludes: []})
 
   let userRoleMap = await buildUserRolesMap(targetAdminClient, {realm: env, roleMappings: rolesMap})
 
+  let index = 0
+
   for (const user of userList) {
+    console.log(user)
 
 
 
-
-
-    let clientRoleList = user.client_list.split(";")
+    let clientRoleList = user.role_list.split(";")
+    let username = guidList[index]
 
     for (const clientRole of clientRoleList) {
       const client = clientRole.split(":")[0]
@@ -255,34 +262,43 @@ async function mapUserRoles(
 
       const roleMapping = {
         realm,
-        id: user.username,
+        id: username,
         clientUniqueId: client,
       };
 
-      let role = await targetAdminClient.clients.findRole({
+      console.log("Looking in realm",roleMapping.realm,"for client",client,"with role",roleName)
+
+      let role: RoleRepresentation
+      role = await targetAdminClient.clients.findRole({
         realm: env,
         id: client,
         roleName: roleName
       })
 
+      console.log(role)
 
       const payload: RoleMappingPayload = { id: role.id as string, name: roleName}
 
       targetAdminClient.users.addClientRoleMappings( {
-        id: user.username,
+        id: username,
         clientUniqueId: clientRole.split(":")[0],
         roles: [payload],
         realm: env
       })
     }
 
-
+    index++
   }
 }
 
 targetAdminClient.then(
   (client) => {
-    pushUsers(client, userList)
-    mapUserRoles(client, userList)
+    let guidList: string[] = []
+    pushUsers(client, userList, guidList).then((arr) => {
+      console.log(arr)
+      mapUserRoles(client, arr, userList)
+      }
+    )
+
   }
 )

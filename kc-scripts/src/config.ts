@@ -7,11 +7,17 @@ export const WEBADE_USERNAME = process.env.WEBADE_USERNAME;
 export const WEBADE_PASSWORD = process.env.WEBADE_PASSWORD;
 export const WEBADE_URL = process.env.WEBADE_URL;
 
-export const DEV_KEYCLOAK_URL = process.env.DEV_KEYCLOAK_URL || 'https://dev.oidc.gov.bc.ca';
+export const DEV_KEYCLOAK_URL = process.env.DEV_KEYCLOAK_URL || 'https://dev.loginproxy.gov.bc.ca';
 export const DEV_KEYCLOAK_CLIENT_ID = process.env.DEV_KEYCLOAK_CLIENT_ID || 'admin-cli';
 export const DEV_KEYCLOAK_CLIENT_SECRET = process.env.DEV_KEYCLOAK_CLIENT_SECRET;
 export const DEV_KEYCLOAK_USERNAME = process.env.DEV_KEYCLOAK_USERNAME;
 export const DEV_KEYCLOAK_PASSWORD = process.env.DEV_KEYCLOAK_PASSWORD;
+
+export const WILDFIRE_KEYCLOAK_URL = process.env.DEV_KEYCLOAK_URL || 'https://dev.loginproxy.gov.bc.ca';
+export const WILDFIRE_KEYCLOAK_CLIENT_ID = process.env.DEV_KEYCLOAK_CLIENT_ID || 'admin-cli';
+export const WILDFIRE_KEYCLOAK_CLIENT_SECRET = process.env.DEV_KEYCLOAK_CLIENT_SECRET;
+export const WILDFIRE_KEYCLOAK_USERNAME = process.env.DEV_KEYCLOAK_USERNAME;
+export const WILDFIRE_KEYCLOAK_PASSWORD = process.env.DEV_KEYCLOAK_PASSWORD;
 
 export const TEST_KEYCLOAK_URL = process.env.TEST_KEYCLOAK_URL || 'https://test.oidc.gov.bc.ca';
 export const TEST_KEYCLOAK_CLIENT_ID = process.env.TEST_KEYCLOAK_CLIENT_ID || 'admin-cli';
@@ -55,6 +61,8 @@ export const IDIR_PASSWORD = process.env.IDIR_PASSWORD;
 export const DEV_BCEID_BASIC_USERNAME = process.env.DEV_BCEID_BASIC_USERNAME;
 export const DEV_BCEID_BASIC_PASSWORD = process.env.DEV_BCEID_BASIC_PASSWORD;
 export const TEST_BCEID_BASIC_USERNAME = process.env.TEST_BCEID_BASIC_USERNAME;
+export const WILDFIRE_BCEID_BASIC_USERNAME = process.env.DEV_BCEID_BASIC_USERNAME;
+export const WILDFIRE_BCEID_BASIC_PASSWORD = process.env.DEV_BCEID_BASIC_PASSWORD;
 export const TEST_BCEID_BASIC_PASSWORD = process.env.TEST_BCEID_BASIC_PASSWORD;
 export const PROD_BCEID_BASIC_USERNAME = process.env.PROD_BCEID_BASIC_USERNAME;
 export const PROD_BCEID_BASIC_PASSWORD = process.env.PROD_BCEID_BASIC_PASSWORD;
@@ -70,6 +78,8 @@ export const credentials = {
   IDIR_PASSWORD,
   DEV_BCEID_BASIC_USERNAME,
   DEV_BCEID_BASIC_PASSWORD,
+  WILDFIRE_BCEID_BASIC_PASSWORD,
+  WILDFIRE_BCEID_BASIC_USERNAME,
   TEST_BCEID_BASIC_USERNAME,
   TEST_BCEID_BASIC_PASSWORD,
   PROD_BCEID_BASIC_USERNAME,

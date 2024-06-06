@@ -5,7 +5,7 @@
   "description": "Keycloak scripts",
   "scripts": {
     "build": "rimraf ./build && tsc",
-    "script": "_ () { ts-node -r tsconfig-paths/register src/$@; }; _"
+    "script": "ts-node -r tsconfig-paths/register src/migrations/migrate-idir-csv-users.ts"
   },
   "author": "SSO Team",
   "license": "Apache-2.0",
