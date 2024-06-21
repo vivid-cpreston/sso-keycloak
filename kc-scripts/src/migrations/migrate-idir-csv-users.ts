@@ -16,7 +16,8 @@ import RoleRepresentation, { RoleMappingPayload } from '@keycloak/keycloak-admin
 import { assignUserToRealmRole, buildRoleMappings, buildUserRolesMap, createTargetUserRoleBindings } from 'helpers/groups-roles-users';
 import fetch from 'node-fetch';
 import Response from 'node-fetch'
-
+import { fail } from 'yargs';
+import { Env } from 'core';
 
 const basePath = path.join(__dirname, 'exports');
 
@@ -49,6 +50,13 @@ interface userResponse {
   ]
 }
 
+interface ClientRoleRepresentation {
+  clientID: string,
+  clientName: string,
+  roleId: string,
+  roleName: string
+}
+
 const argv = yargs(process.argv.slice(2))
   .options({
     filePath: { type: 'string', default: '' },
@@ -62,7 +70,7 @@ const argv = yargs(process.argv.slice(2))
 
 const { filePath, realm, env, concurrency, auto, totp } = argv;
 
-const targetAdminClient = getAdminClient() as Promise<KeycloakAdminClient>
+const targetAdminClient = getAdminClient(env as Env, {}) as Promise<KeycloakAdminClient>
 
 console.log(filePath)
 
@@ -82,27 +90,16 @@ const userList = parse( csvFile,
 
 async function getDetailsFromAccountName(accountName: string){
 
-  console.log("entered getDetailsFromAccountName")
-
   try {
     let headers = {
         "Content-Type":  "application/json",
         "Authorization": "Basic " + Buffer.from(WEBADE_USERNAME + ":" + WEBADE_PASSWORD, 'binary').toString('base64')
     };
 
-    console.log(headers)
-
-    console.log(">>> URL is ", WEBADE_URL + "/usertypes/GOV/users?accountName=" + accountName)
-
     let response = await fetch(WEBADE_URL + "/usertypes/GOV/users?accountName=" + accountName, {"method": "GET", "headers": headers})
-
-    console.log(">>> status code is ", response.status.toString())
 
     let responseJson = await response.json() as any
 
-
-
-    console.log(">>> Response data is ",response)
     let details = {
       userGuid: responseJson.users[0].userGuid,
       accountName: accountName,
@@ -113,7 +110,6 @@ async function getDetailsFromAccountName(accountName: string){
     return details
   }
   catch(err) {
-    console.error(">>> Error is",err)
     throw err
   }
 
@@ -126,37 +122,44 @@ async function pushUsers(
     idir_username: string,
     role_list: string
   }],
-  guidList: string[]
+  userIdList: string[]
 ) {
   let userCount = 0
 
   console.log(userList)
 
   for (const user of userList) {
-    console.log("USER",user.idir_username)
 
-  let webadeDetails = await getDetailsFromAccountName(user.idir_username)
+    let webadeDetails: {
+      userGuid: any;
+      accountName: string;
+      firstName: any;
+      lastName: any;
+    }
 
-    console.log("Push ", webadeDetails.userGuid + "@azureidir")
-    guidList.push( webadeDetails.userGuid + "@azureidir")
-    console.log("GuidList is",guidList.toString())
+    try {
+      webadeDetails = await getDetailsFromAccountName(user.idir_username)
+      console.log(webadeDetails)
+    }
+    catch(err) {
+      console.error("Could not process user " + user.idir_username + "! Please verify account type")
+      userIdList.push("")
+      continue
+    }
 
-    console.log("Webade Details are:",webadeDetails)
-
-    let targetUsers = await targetAdminClient.users.find({
+    let targetUsers = await  targetAdminClient.users.find({
       realm: realm,
       username: webadeDetails.userGuid + "@azureidir",
       exact: true
     }) as UserRepresentation[]
-
     //idirLookupResults does not appear to work with @azureidir accounts
 
 
     let details;
 
     if (targetUsers.length > 0) {
-      console.log("targetUser exists")
-      details = targetUsers[0] as UserRepresentation
+      userIdList.push(targetUsers[0].id as string)
+      details = targetUsers[0] as any
       details.username = webadeDetails.userGuid + "@azureidir"
       details.lastName = webadeDetails.lastName.length>0 ? webadeDetails.lastName : details.lastName
       details.firstName = webadeDetails.firstName.length>0 ? webadeDetails.firstName : details.firstName
@@ -165,17 +168,16 @@ async function pushUsers(
 
     }
     else {
-      console.log("Generating details for", user.idir_username)
       details = {
-        guid: null,
-        userId: webadeDetails.userGuid + "@azureidir" ,
+        guid: webadeDetails.userGuid,
+        username: webadeDetails.userGuid + "@azureidir",
         displayName: null,
         email: null,
         firstName: webadeDetails.firstName,
         lastName: webadeDetails.lastName,
         attributes: {
           display_name: null,
-          idir_user_guid: null,
+          idir_user_guid: webadeDetails.userGuid,
           idir_username: user.idir_username
         }
       }
@@ -183,11 +185,10 @@ async function pushUsers(
 
 
     if (targetUsers.length === 0) {
-      console.log("Adding user", user.idir_username)
       const newuser = await targetAdminClient.users.create({
         enabled: true,
         realm: realm,
-        username: webadeDetails.userGuid + "@azureidir",
+        username: details.username,
         firstName: details.firstName,
         lastName: details.lastName,
         attributes: {
@@ -197,23 +198,23 @@ async function pushUsers(
         },
       });
 
-      const lowerGuid = _.toLower(details.username);
+      userIdList.push(newuser.id as string)
+
+      const lowerUsername = _.toLower(details.username);
 
       await targetAdminClient.users.addToFederatedIdentity({
         realm: realm,
         id: newuser.id,
         federatedIdentityId: 'azureidir',
         federatedIdentity: {
-          userId: lowerGuid,
-          userName: lowerGuid,
-          identityProvider: 'azureidir',
+          userId: lowerUsername,
+          userName: lowerUsername
         },
-      });
+      }).then(() => console.log("userid:",lowerUsername));
 
       console.log("Added user",webadeDetails.accountName)
     }
     else {
-      console.log("Updating user", webadeDetails.accountName)
       await targetAdminClient.users.update({ id: details.id as string, realm: realm},{
         firstName: details.firstName,
         lastName: details.lastName,
@@ -223,15 +224,40 @@ async function pushUsers(
           idir_username: details.attributes?.idir_username
         },
       })
+
+      const lowerUsername = _.toLower(details.username);
+
+      try {
+        await targetAdminClient.users.delFromFederatedIdentity({
+          realm: realm,
+          id: details.id as string,
+          federatedIdentityId: 'azureidir'
+        })
+      }
+      catch(err) {
+        console.warn("Del from federatedIdentity failed")
+      }
+
+      await targetAdminClient.users.addToFederatedIdentity({
+          realm: realm,
+          id: (details as UserRepresentation).id as string,
+          federatedIdentityId: 'azureidir',
+          federatedIdentity: {
+            userId: lowerUsername,
+            userName: lowerUsername
+          },
+        })
+
+
     }
   }
 
-  return guidList
+  return userIdList
 }
 
 async function mapUserRoles(
   targetAdminClient: KeycloakAdminClient,
-  guidList: string[],
+  userIdList: string[],
   userList: [{
     idir_username: string
     role_list: string
@@ -242,61 +268,82 @@ async function mapUserRoles(
 
 
 
-  let rolesMap = await buildRoleMappings(targetAdminClient, {realm: env, excludes: []})
+  let rolesMap = await buildRoleMappings(targetAdminClient, {realm: realm, excludes: []})
 
-  let userRoleMap = await buildUserRolesMap(targetAdminClient, {realm: env, roleMappings: rolesMap})
+  let userRoleMap = await buildUserRolesMap(targetAdminClient, {realm: realm, roleMappings: rolesMap})
+
+  let roleArray: ClientRoleRepresentation[] = []
+
+  let clientList = await targetAdminClient.clients.find()
+
+  let failedRoleNames: string[] = []
+
+
+  for(const client of clientList) {
+    if (client.id) {
+      const roles = await targetAdminClient.clients.listRoles({id: client.id, realm: realm})
+
+      roles.forEach((role) => {
+        roleArray.push( {
+          clientID: client.id as string,
+          clientName: client.clientId as string,
+          roleId: role.id as string,
+          roleName: role.name as string
+        })
+      })
+
+    }
+  }
+
 
   let index = 0
 
   for (const user of userList) {
-    console.log(user)
 
+    if(userIdList[index] == "") {
+      console.warn("skipping user", user.idir_username)
+      index++
+      continue
+    }
 
 
     let clientRoleList = user.role_list.split(";")
-    let username = guidList[index]
+    let userId = userIdList[index]
 
     for (const clientRole of clientRoleList) {
       const client = clientRole.split(":")[0]
       const roleName = clientRole.split(":")[1]
 
-      const roleMapping = {
-        realm,
-        id: username,
-        clientUniqueId: client,
-      };
+      try {
+      let filteredRole = roleArray.filter((entry) => {
+        return (entry.clientName == client && entry.roleName == roleName)
+      })[0]
 
-      console.log("Looking in realm",roleMapping.realm,"for client",client,"with role",roleName)
+      const payload: RoleMappingPayload = { id: filteredRole.roleId as string, name: filteredRole.roleName}
 
-      let role: RoleRepresentation
-      role = await targetAdminClient.clients.findRole({
-        realm: env,
-        id: client,
-        roleName: roleName
-      })
-
-      console.log(role)
-
-      const payload: RoleMappingPayload = { id: role.id as string, name: roleName}
-
-      targetAdminClient.users.addClientRoleMappings( {
-        id: username,
-        clientUniqueId: clientRole.split(":")[0],
+      await targetAdminClient.users.addClientRoleMappings( {
+        id: userId,
+        clientUniqueId: filteredRole.clientID,
         roles: [payload],
-        realm: env
+        realm: realm
       })
+    }
+    catch(err) {
+      failedRoleNames.push( client + ":" + roleName )
+    }
     }
 
     index++
   }
+  console.log("failed roles are as follows")
+  failedRoleNames.forEach(failedRole => console.log(failedRole))
 }
 
 targetAdminClient.then(
   (client) => {
-    let guidList: string[] = []
-    pushUsers(client, userList, guidList).then((arr) => {
-      console.log(arr)
-      mapUserRoles(client, arr, userList)
+    let emptyUserIdList: string[] = []
+    pushUsers(client, userList, emptyUserIdList).then((filledUserIdList) => {
+      mapUserRoles(client, filledUserIdList, userList)
       }
     )
 

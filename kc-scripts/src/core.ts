@@ -49,13 +49,6 @@ const envs = {
     username: DEV_KEYCLOAK_USERNAME,
     password: DEV_KEYCLOAK_PASSWORD,
   },
-  wildfire: {
-    url: removeTrailingSlash(DEV_KEYCLOAK_URL),
-    clientId: DEV_KEYCLOAK_CLIENT_ID,
-    clientSecret: DEV_KEYCLOAK_CLIENT_SECRET,
-    username: DEV_KEYCLOAK_USERNAME,
-    password: DEV_KEYCLOAK_PASSWORD,
-  },
   test: {
     url: removeTrailingSlash(TEST_KEYCLOAK_URL),
     clientId: TEST_KEYCLOAK_CLIENT_ID,
@@ -93,7 +86,7 @@ const envs = {
   },
 };
 
-export const getRealmUrl = (env: Env = 'dev', realm = 'master') => {
+export const getRealmUrl = (env: Env, realm = 'wildfire') => {
   try {
     const config = envs[env];
     if (!config) throw Error(`invalid env ${env}`);
@@ -120,7 +113,7 @@ export const getOidcConfiguration = async (env: Env = 'dev', realm = 'master') =
   }
 };
 
-export const getAdminClient = async (env: Env = 'dev', { totp = '' } = {}) => {
+export const getAdminClient = async (env: Env, { totp = '' } = {}) => {
   try {
     const config = envs[env];
     if (!config) throw Error(`invalid env ${env}`);
@@ -133,6 +126,23 @@ export const getAdminClient = async (env: Env = 'dev', { totp = '' } = {}) => {
         timeout: 60000,
       },
     });
+
+    console.log({
+      baseUrl: `${config.url}/auth`,
+      realmName: 'wildfire',
+      requestConfig: {
+        /* Axios request config options https://github.com/axios/axios#request-config */
+        timeout: 60000,
+      }})
+
+    console.log({
+      grantType: config.clientSecret ? 'client_credentials' : 'password',
+      clientId: config.clientId,
+      clientSecret: config.clientSecret,
+      username: config.username,
+      password: config.password,
+      totp,
+    })
 
     await kcAdminClient.auth({
       grantType: config.clientSecret ? 'client_credentials' : 'password',
