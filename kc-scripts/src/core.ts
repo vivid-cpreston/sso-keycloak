@@ -49,6 +49,13 @@ const envs = {
     username: DEV_KEYCLOAK_USERNAME,
     password: DEV_KEYCLOAK_PASSWORD,
   },
+  wildfire: {
+    url: removeTrailingSlash(DEV_KEYCLOAK_URL),
+    clientId: DEV_KEYCLOAK_CLIENT_ID,
+    clientSecret: DEV_KEYCLOAK_CLIENT_SECRET,
+    username: DEV_KEYCLOAK_USERNAME,
+    password: DEV_KEYCLOAK_PASSWORD,
+  },
   test: {
     url: removeTrailingSlash(TEST_KEYCLOAK_URL),
     clientId: TEST_KEYCLOAK_CLIENT_ID,
@@ -120,7 +127,7 @@ export const getAdminClient = async (env: Env = 'dev', { totp = '' } = {}) => {
 
     const kcAdminClient = new KcAdminClient({
       baseUrl: `${config.url}/auth`,
-      realmName: 'master',
+      realmName: 'wildfire',
       requestConfig: {
         /* Axios request config options https://github.com/axios/axios#request-config */
         timeout: 60000,
